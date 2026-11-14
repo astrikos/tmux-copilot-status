@@ -108,6 +108,7 @@ class TmuxIntegration(unittest.TestCase):
                         return output
                     return re.sub(r"#\[[^]]*\]", "", output).rstrip("\n")
 
+                tmux("select-pane", "-t", first)
                 event(first, "userPromptSubmitted")
                 event(second, "notification", notification_type="permission_prompt")
                 event(third, "agentStop")
@@ -116,7 +117,7 @@ class TmuxIntegration(unittest.TestCase):
                 self.assertNotIn("p1", bottom)
                 self.assertIn("copilot", bottom)
                 self.assertIn("#e5b567", render(styled=True))
-                self.assertIn("fg=#9ece6a,bg=#1b1b20] \u25cf", render(0, styled=True))
+                self.assertIn("#[fg=#9ece6a]\u25cf", render(0, styled=True))
                 self.assertIn("beta /", render(0))
 
                 master, slave = pty.openpty()
@@ -139,7 +140,6 @@ class TmuxIntegration(unittest.TestCase):
                     self.fail(f"Status output missing {needle!r}")
 
                 wait_for(b"\x1b[24;")
-                tmux("select-pane", "-t", first)
                 def click_x(target, row=1):
                     prefix = render(row, styled=True).split(
                         f"#[range=user|{target},", 1,
@@ -158,6 +158,10 @@ class TmuxIntegration(unittest.TestCase):
                     tmux("show-messages") + "\n"
                     + tmux("list-keys", "-T", "root", "MouseDown1Status"),
                 )
+                selected_style = render(styled=True).split(
+                    f"#[range=user|{second},", 1,
+                )[1].split("#[norange,default]", 1)[0]
+                self.assertIn("bg=#9ece6a", selected_style)
                 # Exercise a separate click, not tmux's double-click event.
                 time.sleep(0.6)
                 x = click_x(third, row=0)

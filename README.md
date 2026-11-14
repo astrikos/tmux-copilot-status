@@ -37,7 +37,7 @@ or keyboard shortcuts.
 
 ## Appearance
 
-**Green window = active window.** Other headers and pane buttons stay neutral.
+**Green = active window and selected pane.** Other pills stay neutral.
 Only `copilot` and `copilot-cli` processes get colored activity dots:
 
 | Dot | State |
@@ -47,8 +47,9 @@ Only `copilot` and `copilot-cli` processes get colored activity dots:
 | Green | Idle |
 | Gray | Unknown; no usable hook state |
 
-Single-pane windows have no lower button; their Copilot dot sits beside the
-header. Split windows show process buttons underneath. Groups stay centered;
+Single-pane windows have no lower button; their dot sits inside the header,
+immediately before `copilot`. Dots use darker shades on green pills for contrast.
+Split windows show process buttons underneath. Groups stay centered;
 `+N windows` indicates overflow. Enable tmux mouse support to click headers
 or pane buttons, including across sessions.
 

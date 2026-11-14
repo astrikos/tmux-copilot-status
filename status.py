@@ -23,6 +23,12 @@ BAR = "#1b1b20"
 PILL = "#292c31"
 ACTIVE = "#9ece6a"
 TEXT = "#c5c8d3"
+ACTIVE_DOTS = {
+    COLORS["waiting"]: "#875700",
+    COLORS["working"]: "#2155a3",
+    COLORS["idle"]: "#245b26",
+    COLORS["unknown"]: "#414454",
+}
 
 
 def tmux(*args):
@@ -233,11 +239,20 @@ def groups(items):
             copilot_color(group["panes"][0])
             if len(group["panes"]) == 1 else None
         )
+        title = group["title"]
+        if dot_color:
+            pane = group["panes"][0]
+            match = re.search(r"\bcopilot(?:-cli)?\b", pane["title"], re.I)
+            if match:
+                index = len(title) - len(pane["title"]) + match.start()
+                title = title[:index] + "\u25cf " + title[index:]
+            else:
+                title += " \u25cf " + pane["app"]
         size = max(
-            len(group["title"]) + 4 + (2 if dot_color else 0),
+            len(title) + 4,
             sum(len(p[0]) + 4 for p in parts) + max(0, len(parts) - 1),
         )
-        result.append(dict(group, parts=parts, dot_color=dot_color, width=size))
+        result.append(dict(group, title=title, parts=parts, dot_color=dot_color, width=size))
     return result
 
 
@@ -292,6 +307,16 @@ def rounded(content, color, target):
     )
 
 
+def styled_label(text, color, active):
+    foreground = BAR if active else TEXT
+    if color:
+        color = ACTIVE_DOTS[color] if active else color
+        text = text.replace(
+            "\u25cf", f"#[fg={color}]\u25cf#[fg={foreground}]", 1,
+        )
+    return f"#[fg={foreground}]{text}"
+
+
 def window_cell(group, row, active_window):
     target = next(
         (p["id"] for p in group["panes"] if p["active"]),
@@ -300,26 +325,17 @@ def window_cell(group, row, active_window):
     if row == 0:
         active = group["id"] == active_window
         background = ACTIVE if active else PILL
-        foreground = BAR if active else TEXT
         dot_color = group["dot_color"]
-        width = group["width"] - 2 - (2 if dot_color else 0)
+        width = group["width"] - 2
         title = group["title"][:width].center(width)
-        emphasis = ",bold,underscore" if active else ""
-        output = rounded(f"#[fg={foreground}{emphasis}]{title}", background, target)
-        if dot_color:
-            output += (
-                f"#[range=user|{target},fg={dot_color},bg={BAR}] \u25cf"
-                "#[norange,default]"
-            )
-        return output
+        emphasis = "#[bold]" if active else ""
+        return rounded(emphasis + styled_label(title, dot_color, active), background, target)
     parts, suffix = fitted_parts(group["parts"], group["width"])
     chunks = []
     for text, color, pid in parts:
-        label = (
-            f"#[fg={color}]\u25cf#[fg={TEXT}]{text[1:]}"
-            if color else f"#[fg={TEXT}]{text}"
-        )
-        chunks.append(rounded(f" {label} ", PILL, pid))
+        active = group["id"] == active_window and pid == target
+        background = ACTIVE if active else PILL
+        chunks.append(rounded(styled_label(f" {text} ", color, active), background, pid))
     used = sum(len(text) + 4 for text, _, _ in parts) + max(0, len(parts) - 1) + len(suffix)
     padding = max(0, group["width"] - used)
     return (

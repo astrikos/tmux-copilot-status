@@ -100,8 +100,8 @@ class Rendering(unittest.TestCase):
         items = [pane(state="unknown"), pane(index=1, state=None), pane(window=2)]
         top = plain(status.render(items, 0, 100, "@1"))
         bottom = plain(status.render(items, 1, 100, "@1"))
-        self.assertEqual(top.index("\ue0b6"), 32)
-        self.assertEqual(bottom.index("\ue0b6"), 32)
+        self.assertEqual(top.index("\ue0b6"), 28)
+        self.assertEqual(bottom.index("\ue0b6"), 28)
         self.assertEqual(bottom.count("copilot"), 1)
         self.assertEqual(bottom.count("zsh"), 1)
         self.assertNotIn("+1", bottom)
@@ -113,18 +113,31 @@ class Rendering(unittest.TestCase):
 
     def test_single_pane_has_only_a_colored_clickable_header(self):
         item = pane(state="waiting")
-        item["title"] = "one"
+        item["title"] = "copilot"
         top = status.render([item], 0, 20, "@1")
         bottom = status.render([item], 1, 20, "@1")
-        self.assertIn("1 one", plain(top))
+        self.assertIn("1 \u25cf copilot", plain(top))
         self.assertIn("bg=" + status.ACTIVE, top)
-        self.assertIn("fg=" + status.COLORS["waiting"], top)
+        self.assertIn("fg=" + status.ACTIVE_DOTS[status.COLORS["waiting"]], top)
         self.assertEqual(plain(top).count("\u25cf"), 1)
+        self.assertLess(plain(top).index("\u25cf"), plain(top).index("\ue0b4"))
         self.assertIn("#[range=user|%10,", top)
         self.assertEqual(plain(bottom).strip(), "")
         self.assertNotIn("#[range=user|", bottom)
         item["app"] = "copilot-cli"
         self.assertEqual(status.render([item], 0, 20, "@1"), top)
+
+    def test_custom_single_pane_title_keeps_process_dot_inside_the_pill(self):
+        item = pane(session="copilot")
+        item["title"] = "review"
+        top = plain(status.render(
+            [item, pane(window=2, session="backend")], 0, 120, "@1",
+        ))
+        self.assertIn("copilot / 1 review \u25cf copilot", top)
+        group = status.groups([item])[0]
+        cell = plain(status.window_cell(group, 0, "@1"))
+        self.assertLess(cell.index("\ue0b6"), cell.index("\u25cf"))
+        self.assertLess(cell.index("\u25cf"), cell.index("\ue0b4"))
 
     def test_active_header_is_green_and_inactive_header_is_neutral(self):
         items = [pane(), pane(index=1, state="waiting")]
@@ -132,7 +145,8 @@ class Rendering(unittest.TestCase):
         active = status.window_cell(group, 0, "@1")
         inactive = status.window_cell(group, 0, "@2")
         self.assertIn("bg=" + status.ACTIVE, active)
-        self.assertIn("bold,underscore", active)
+        self.assertIn("#[bold]", active)
+        self.assertNotIn(",underscore", active)
         self.assertIn("bg=" + status.PILL, inactive)
         self.assertNotIn("bg=" + status.ACTIVE, inactive)
         self.assertNotIn("bg=" + status.COLORS["waiting"], active + inactive)
@@ -144,7 +158,7 @@ class Rendering(unittest.TestCase):
                 copilot["app"] = "copilot-cli"
                 ordinary = pane(index=1, state="idle")
                 ordinary["app"] = "node"
-                styled = status.render([copilot, ordinary], 1, 100, "@1")
+                styled = status.render([copilot, ordinary], 1, 100, "@2")
                 self.assertEqual(plain(styled).count("\u25cf"), 1)
                 self.assertIn(f"#[fg={color}]\u25cf", styled)
                 self.assertIn("\u25cf copilot-cli", plain(styled))
@@ -154,6 +168,34 @@ class Rendering(unittest.TestCase):
                     self.assertNotIn("bg=" + activity, styled)
                 header = status.render([ordinary], 0, 100, "@1")
                 self.assertNotIn("\u25cf", plain(header))
+
+    def test_only_the_selected_pane_in_the_active_window_is_green(self):
+        copilot = pane(state="idle")
+        ordinary = pane(index=1, state=None)
+
+        def segment(text, item):
+            return text.split(f"#[range=user|{item['id']},", 1)[1].split(
+                "#[norange,default]", 1,
+            )[0]
+
+        group = status.groups([copilot, ordinary])[0]
+        selected = status.window_cell(group, 1, "@1")
+        self.assertIn("bg=" + status.ACTIVE, segment(selected, copilot))
+        self.assertIn(
+            "fg=" + status.ACTIVE_DOTS[status.COLORS["idle"]],
+            segment(selected, copilot),
+        )
+        self.assertIn("bg=" + status.PILL, segment(selected, ordinary))
+        inactive = status.window_cell(group, 1, "@2")
+        self.assertNotIn("bg=" + status.ACTIVE, inactive)
+
+        copilot["active"] = False
+        ordinary["active"] = True
+        group = status.groups([copilot, ordinary])[0]
+        selected = status.window_cell(group, 1, "@1")
+        self.assertIn("bg=" + status.PILL, segment(selected, copilot))
+        self.assertIn("fg=" + status.COLORS["idle"], segment(selected, copilot))
+        self.assertIn("bg=" + status.ACTIVE, segment(selected, ordinary))
 
     def test_width_budget_and_active_window_survives_overflow(self):
         items = [pane(window=i, state="waiting" if i == 2 else "working")
