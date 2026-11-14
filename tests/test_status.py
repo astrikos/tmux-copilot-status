@@ -169,7 +169,7 @@ class Rendering(unittest.TestCase):
                 header = status.render([ordinary], 0, 100, "@1")
                 self.assertNotIn("\u25cf", plain(header))
 
-    def test_only_the_selected_pane_in_the_active_window_is_green(self):
+    def test_only_the_selected_pane_in_the_active_window_is_slate_and_bold_white(self):
         copilot = pane(state="idle")
         ordinary = pane(index=1, state=None)
 
@@ -180,14 +180,16 @@ class Rendering(unittest.TestCase):
 
         group = status.groups([copilot, ordinary])[0]
         selected = status.window_cell(group, 1, "@1")
-        self.assertIn("bg=" + status.ACTIVE, segment(selected, copilot))
+        self.assertIn("bg=" + status.ACTIVE_PANE, segment(selected, copilot))
+        self.assertIn("#[bold]", segment(selected, copilot))
         self.assertIn(
-            "fg=" + status.ACTIVE_DOTS[status.COLORS["idle"]],
+            f"#[fg={status.COLORS['idle']}]\u25cf#[fg=#ffffff]",
             segment(selected, copilot),
         )
         self.assertIn("bg=" + status.PILL, segment(selected, ordinary))
+        self.assertNotIn("#[bold]", segment(selected, ordinary))
         inactive = status.window_cell(group, 1, "@2")
-        self.assertNotIn("bg=" + status.ACTIVE, inactive)
+        self.assertNotIn("bg=" + status.ACTIVE_PANE, inactive)
 
         copilot["active"] = False
         ordinary["active"] = True
@@ -195,7 +197,8 @@ class Rendering(unittest.TestCase):
         selected = status.window_cell(group, 1, "@1")
         self.assertIn("bg=" + status.PILL, segment(selected, copilot))
         self.assertIn("fg=" + status.COLORS["idle"], segment(selected, copilot))
-        self.assertIn("bg=" + status.ACTIVE, segment(selected, ordinary))
+        self.assertIn("bg=" + status.ACTIVE_PANE, segment(selected, ordinary))
+        self.assertIn("#[bold]#[fg=#ffffff]", segment(selected, ordinary))
 
     def test_width_budget_and_active_window_survives_overflow(self):
         items = [pane(window=i, state="waiting" if i == 2 else "working")

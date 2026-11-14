@@ -22,6 +22,7 @@ COLORS = {
 BAR = "#1b1b20"
 PILL = "#292c31"
 ACTIVE = "#9ece6a"
+ACTIVE_PANE = "#414454"
 TEXT = "#c5c8d3"
 ACTIVE_DOTS = {
     COLORS["waiting"]: "#875700",
@@ -307,10 +308,9 @@ def rounded(content, color, target):
     )
 
 
-def styled_label(text, color, active):
-    foreground = BAR if active else TEXT
+def styled_label(text, color, background, foreground):
     if color:
-        color = ACTIVE_DOTS[color] if active else color
+        color = ACTIVE_DOTS[color] if background == ACTIVE else color
         text = text.replace(
             "\u25cf", f"#[fg={color}]\u25cf#[fg={foreground}]", 1,
         )
@@ -325,17 +325,22 @@ def window_cell(group, row, active_window):
     if row == 0:
         active = group["id"] == active_window
         background = ACTIVE if active else PILL
+        foreground = BAR if active else TEXT
         dot_color = group["dot_color"]
         width = group["width"] - 2
         title = group["title"][:width].center(width)
         emphasis = "#[bold]" if active else ""
-        return rounded(emphasis + styled_label(title, dot_color, active), background, target)
+        label = emphasis + styled_label(title, dot_color, background, foreground)
+        return rounded(label, background, target)
     parts, suffix = fitted_parts(group["parts"], group["width"])
     chunks = []
     for text, color, pid in parts:
         active = group["id"] == active_window and pid == target
-        background = ACTIVE if active else PILL
-        chunks.append(rounded(styled_label(f" {text} ", color, active), background, pid))
+        background = ACTIVE_PANE if active else PILL
+        foreground = "#ffffff" if active else TEXT
+        emphasis = "#[bold]" if active else ""
+        label = emphasis + styled_label(f" {text} ", color, background, foreground)
+        chunks.append(rounded(label, background, pid))
     used = sum(len(text) + 4 for text, _, _ in parts) + max(0, len(parts) - 1) + len(suffix)
     padding = max(0, group["width"] - used)
     return (

@@ -37,7 +37,8 @@ or keyboard shortcuts.
 
 ## Appearance
 
-**Green = active window and selected pane.** Other pills stay neutral.
+**Green = active window. Slate with bold white text = selected pane.**
+Other pills stay neutral.
 Only `copilot` and `copilot-cli` processes get colored activity dots:
 
 | Dot | State |

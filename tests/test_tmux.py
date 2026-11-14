@@ -161,7 +161,8 @@ class TmuxIntegration(unittest.TestCase):
                 selected_style = render(styled=True).split(
                     f"#[range=user|{second},", 1,
                 )[1].split("#[norange,default]", 1)[0]
-                self.assertIn("bg=#9ece6a", selected_style)
+                self.assertIn("bg=#414454", selected_style)
+                self.assertIn("#[bold]#[fg=#ffffff]", selected_style)
                 # Exercise a separate click, not tmux's double-click event.
                 time.sleep(0.6)
                 x = click_x(third, row=0)
