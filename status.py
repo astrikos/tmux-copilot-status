@@ -12,14 +12,17 @@ import time
 
 
 OPTION = "@copilot_status"
+COPILOT_NAMES = ("copilot", "copilot-cli")
 COLORS = {
     "waiting": "#e5b567",
     "working": "#7ca5ff",
     "idle": "#9ece6a",
-    "unknown": "#414454",
+    "unknown": "#858795",
 }
 BAR = "#1b1b20"
 PILL = "#292c31"
+ACTIVE = "#9ece6a"
+TEXT = "#c5c8d3"
 
 
 def tmux(*args):
@@ -58,7 +61,7 @@ def ancestor(pid, table, predicate):
 
 
 def is_copilot(process):
-    return process["name"] in ("copilot", "copilot-cli")
+    return process["name"] in COPILOT_NAMES
 
 
 def decode(value):
@@ -201,6 +204,12 @@ def panes():
     return sorted(found, key=lambda p: (p["session"], p["window"], p["index"]))
 
 
+def copilot_color(pane):
+    if pane["app"] not in COPILOT_NAMES:
+        return None
+    return COLORS.get(pane["state"], COLORS["unknown"])
+
+
 def groups(items):
     windows = {}
     multiple_sessions = len({item["session"] for item in items}) > 1
@@ -214,15 +223,21 @@ def groups(items):
         windows[wid]["panes"].append(item)
     result = []
     for group in windows.values():
-        parts = [
-            (p["app"], COLORS.get(p["state"], PILL), p["id"])
-            for p in group["panes"]
-        ] if len(group["panes"]) > 1 else []
+        parts = []
+        if len(group["panes"]) > 1:
+            for pane in group["panes"]:
+                color = copilot_color(pane)
+                text = ("\u25cf " if color else "") + pane["app"]
+                parts.append((text, color, pane["id"]))
+        dot_color = (
+            copilot_color(group["panes"][0])
+            if len(group["panes"]) == 1 else None
+        )
         size = max(
-            len(group["title"]) + 4,
+            len(group["title"]) + 4 + (2 if dot_color else 0),
             sum(len(p[0]) + 4 for p in parts) + max(0, len(parts) - 1),
         )
-        result.append(dict(group, parts=parts, width=size))
+        result.append(dict(group, parts=parts, dot_color=dot_color, width=size))
     return result
 
 
@@ -284,23 +299,27 @@ def window_cell(group, row, active_window):
     )
     if row == 0:
         active = group["id"] == active_window
-        state = next(
-            (state for state in COLORS if any(p["state"] == state for p in group["panes"])),
-            None,
-        )
-        background = COLORS.get(state, PILL)
-        foreground = BAR if state in ("working", "waiting", "idle") else "#c5c8d3"
-        title = group["title"][:group["width"] - 2].center(group["width"] - 2)
+        background = ACTIVE if active else PILL
+        foreground = BAR if active else TEXT
+        dot_color = group["dot_color"]
+        width = group["width"] - 2 - (2 if dot_color else 0)
+        title = group["title"][:width].center(width)
         emphasis = ",bold,underscore" if active else ""
-        return rounded(f"#[fg={foreground}{emphasis}]{title}", background, target)
+        output = rounded(f"#[fg={foreground}{emphasis}]{title}", background, target)
+        if dot_color:
+            output += (
+                f"#[range=user|{target},fg={dot_color},bg={BAR}] \u25cf"
+                "#[norange,default]"
+            )
+        return output
     parts, suffix = fitted_parts(group["parts"], group["width"])
     chunks = []
     for text, color, pid in parts:
-        foreground = (
-            BAR if color in (COLORS["working"], COLORS["waiting"], COLORS["idle"])
-            else "#c5c8d3"
+        label = (
+            f"#[fg={color}]\u25cf#[fg={TEXT}]{text[1:]}"
+            if color else f"#[fg={TEXT}]{text}"
         )
-        chunks.append(rounded(f"#[fg={foreground}] {text} ", color, pid))
+        chunks.append(rounded(f" {label} ", PILL, pid))
     used = sum(len(text) + 4 for text, _, _ in parts) + max(0, len(parts) - 1) + len(suffix)
     padding = max(0, group["width"] - used)
     return (

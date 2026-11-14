@@ -36,15 +36,14 @@ class TmuxIntegration(unittest.TestCase):
                 env=env, capture_output=True, text=True, check=True,
             )
             shell = directory / "copilot"
-            # Keep a real copilot ancestor without starting AI or using credentials.
+            # Keep a foreground copilot without starting AI or using credentials.
             subprocess.run(
                 ["cc", "-x", "c", "-o", str(shell), "-"],
                 input=(
-                    "#include <unistd.h>\n#include <sys/wait.h>\n"
-                    "int main(void) { int status; pid_t p = fork();"
-                    "if (p == 0) { execl(\"/bin/sh\", \"sh\", \"-i\", (char *)0);"
-                    "_exit(1); } if (p < 0) return 1;"
-                    "waitpid(p, &status, 0); return 0; }\n"
+                    "#include <stdio.h>\n#include <stdlib.h>\n"
+                    "int main(void) { char *line = NULL; size_t size = 0;"
+                    "while (getline(&line, &size, stdin) != -1) { system(line); }"
+                    "free(line); return 0; }\n"
                 ),
                 text=True, capture_output=True, check=True,
             )
@@ -115,9 +114,9 @@ class TmuxIntegration(unittest.TestCase):
                 bottom = render()
                 self.assertNotIn("p0", bottom)
                 self.assertNotIn("p1", bottom)
-                self.assertTrue("copilot" in bottom or "sh" in bottom)
+                self.assertIn("copilot", bottom)
                 self.assertIn("#e5b567", render(styled=True))
-                self.assertIn("#9ece6a", render(0, styled=True))
+                self.assertIn("fg=#9ece6a,bg=#1b1b20] \u25cf", render(0, styled=True))
                 self.assertIn("beta /", render(0))
 
                 master, slave = pty.openpty()

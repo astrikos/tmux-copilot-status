@@ -100,8 +100,8 @@ class Rendering(unittest.TestCase):
         items = [pane(state="unknown"), pane(index=1, state=None), pane(window=2)]
         top = plain(status.render(items, 0, 100, "@1"))
         bottom = plain(status.render(items, 1, 100, "@1"))
-        self.assertEqual(top.index("\ue0b6"), 34)
-        self.assertEqual(bottom.index("\ue0b6"), 34)
+        self.assertEqual(top.index("\ue0b6"), 32)
+        self.assertEqual(bottom.index("\ue0b6"), 32)
         self.assertEqual(bottom.count("copilot"), 1)
         self.assertEqual(bottom.count("zsh"), 1)
         self.assertNotIn("+1", bottom)
@@ -113,23 +113,47 @@ class Rendering(unittest.TestCase):
 
     def test_single_pane_has_only_a_colored_clickable_header(self):
         item = pane(state="waiting")
-        item["app"] = "long-process-name"
         item["title"] = "one"
         top = status.render([item], 0, 20, "@1")
         bottom = status.render([item], 1, 20, "@1")
         self.assertIn("1 one", plain(top))
-        self.assertIn("bg=" + status.COLORS["waiting"], top)
+        self.assertIn("bg=" + status.ACTIVE, top)
+        self.assertIn("fg=" + status.COLORS["waiting"], top)
+        self.assertEqual(plain(top).count("\u25cf"), 1)
         self.assertIn("#[range=user|%10,", top)
         self.assertEqual(plain(bottom).strip(), "")
         self.assertNotIn("#[range=user|", bottom)
-        item["app"] = "sh"
+        item["app"] = "copilot-cli"
         self.assertEqual(status.render([item], 0, 20, "@1"), top)
 
-    def test_header_color_prioritizes_waiting_and_marks_active_window(self):
+    def test_active_header_is_green_and_inactive_header_is_neutral(self):
         items = [pane(), pane(index=1, state="waiting")]
-        styled = status.render(items, 0, 100, "@1")
-        self.assertIn("bg=" + status.COLORS["waiting"], styled)
-        self.assertIn("bold,underscore", styled)
+        group = status.groups(items)[0]
+        active = status.window_cell(group, 0, "@1")
+        inactive = status.window_cell(group, 0, "@2")
+        self.assertIn("bg=" + status.ACTIVE, active)
+        self.assertIn("bold,underscore", active)
+        self.assertIn("bg=" + status.PILL, inactive)
+        self.assertNotIn("bg=" + status.ACTIVE, inactive)
+        self.assertNotIn("bg=" + status.COLORS["waiting"], active + inactive)
+
+    def test_only_copilot_processes_get_status_dots_and_neutral_pills(self):
+        for state, color in status.COLORS.items():
+            with self.subTest(state=state):
+                copilot = pane(state=state)
+                copilot["app"] = "copilot-cli"
+                ordinary = pane(index=1, state="idle")
+                ordinary["app"] = "node"
+                styled = status.render([copilot, ordinary], 1, 100, "@1")
+                self.assertEqual(plain(styled).count("\u25cf"), 1)
+                self.assertIn(f"#[fg={color}]\u25cf", styled)
+                self.assertIn("\u25cf copilot-cli", plain(styled))
+                self.assertIn("node", plain(styled))
+                self.assertIn("bg=" + status.PILL, styled)
+                for activity in status.COLORS.values():
+                    self.assertNotIn("bg=" + activity, styled)
+                header = status.render([ordinary], 0, 100, "@1")
+                self.assertNotIn("\u25cf", plain(header))
 
     def test_width_budget_and_active_window_survives_overflow(self):
         items = [pane(window=i, state="waiting" if i == 2 else "working")
