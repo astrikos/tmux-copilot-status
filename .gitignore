@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+*.copilot-status.bak
+*.copilot-font-backup.toml
+*.copilot-font-state.json
