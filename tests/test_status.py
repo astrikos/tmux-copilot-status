@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -93,6 +94,31 @@ class Transitions(unittest.TestCase):
                 env=dict(os.environ, TMUX="", TMUX_PANE=""),
             )
             self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
+
+    def test_hooks_keep_latest_metadata_without_redundant_redraws(self):
+        previous = self.event({}, "userPromptSubmitted", -10)
+        cases = (
+            ({}, "userPromptSubmitted", True),
+            (previous, "preToolUse", False),
+            (dict(previous, state="idle"), "preToolUse", True),
+            (dict(previous, session="older-session"), "userPromptSubmitted", True),
+            (dict(previous, owner={"pid": 99, "started": "old"}), "preToolUse", True),
+        )
+        table = {42: {"parent": 1, "started": "test", "name": "copilot"}}
+        with patch.dict(os.environ, {"TMUX": "test", "TMUX_PANE": "%9"}):
+            with patch.object(status, "processes", return_value=table):
+                with patch.object(status.os, "getppid", return_value=42):
+                    for record, event, redraw in cases:
+                        with self.subTest(record=record, event=event):
+                            with patch.object(status.sys, "stdin", io.StringIO(json.dumps(self.data))):
+                                with patch.object(status, "tmux", return_value=json.dumps(record)) as run:
+                                    status.hook(event)
+                            self.assertEqual(run.call_count, 2)
+                            commands = run.call_args.args
+                            updated = json.loads(commands[5])
+                            self.assertEqual(updated["timestamp"], self.now)
+                            self.assertEqual(updated["state"], "working")
+                            self.assertEqual("refresh-client" in commands, redraw)
 
 
 class Rendering(unittest.TestCase):

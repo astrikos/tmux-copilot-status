@@ -194,6 +194,33 @@ class TmuxIntegration(unittest.TestCase):
                 self.assertIn("5 fresh5", render(0))
                 # The attached bar must discover new windows without re-sourcing.
                 wait_for(b"5 fresh5")
+
+                tmux("select-window", "-t", first)
+                tmux("select-pane", "-t", first)
+                next_window = tmux(
+                    "list-windows", "-t", "alpha", "-F", "#{window_id}",
+                ).splitlines()[1]
+                started = directory / "slow-render-started"
+                slow = f"touch {shlex.quote(str(started))}; sleep 2; printf ready"
+                tmux("set-option", "-g", "status-format[0]", f"#({slow})")
+                tmux("set-option", "-g", "status-format[1]", "")
+                tmux("refresh-client", "-S")
+                deadline = time.monotonic() + 3
+                while not started.exists() and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertTrue(started.exists(), "Slow status fixture did not start")
+                for key, fmt, expected in (
+                    (b"\x02o", "#{pane_id}", second),
+                    (b"\x02n", "#{window_id}", next_window),
+                ):
+                    os.write(master, key)
+                    deadline = time.monotonic() + 1
+                    while time.monotonic() < deadline:
+                        selected = tmux("display-message", "-p", "-t", "alpha:", fmt)
+                        if selected == expected:
+                            break
+                        time.sleep(0.01)
+                    self.assertEqual(selected, expected, "Slow status job blocked keyboard navigation")
             finally:
                 try:
                     subprocess.run(

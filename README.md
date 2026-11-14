@@ -65,6 +65,10 @@ Hooks track prompts, tools, attention requests, turn completion, and session
 end. The renderer refreshes every two seconds across the same tmux server,
 checking process identity to discard stale owners.
 
+Status rendering runs asynchronously; navigation never waits for Python.
+Mouse clicks use native tmux commands. Repeated hook states update metadata
+without requesting redundant redraws.
+
 Only state, session ID, timestamp, and process identity are stored. No prompts,
 tool arguments, or scrollback. Hook-derived states are approximate: missed
 events can leave an old state, and waiting clears on the next activity event.

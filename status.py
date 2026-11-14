@@ -149,8 +149,10 @@ def hook(event):
         previous = decode(tmux("show-options", "-pqv", "-t", pane, OPTION))
         updated = transition(previous, event, data, owner)
         if updated is not None:
-            tmux("set-option", "-p", "-t", pane, OPTION, json.dumps(updated))
-            tmux("refresh-client", "-S")
+            commands = ["set-option", "-p", "-t", pane, OPTION, json.dumps(updated)]
+            if any(previous.get(key) != updated[key] for key in ("state", "session", "owner")):
+                commands += [";", "refresh-client", "-S"]
+            tmux(*commands)
 
 
 def pane_state(root, record, table):
