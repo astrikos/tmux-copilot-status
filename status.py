@@ -24,12 +24,7 @@ PILL = "#292c31"
 ACTIVE = "#9ece6a"
 ACTIVE_PANE = "#414454"
 TEXT = "#c5c8d3"
-ACTIVE_DOTS = {
-    COLORS["waiting"]: "#875700",
-    COLORS["working"]: "#2155a3",
-    COLORS["idle"]: "#245b26",
-    COLORS["unknown"]: "#414454",
-}
+SELECTED_DOT = "#858795"
 
 
 def tmux(*args):
@@ -308,9 +303,9 @@ def rounded(content, color, target):
     )
 
 
-def styled_label(text, color, background, foreground):
+def styled_label(text, color, active, foreground):
     if color:
-        color = ACTIVE_DOTS[color] if background == ACTIVE else color
+        color = SELECTED_DOT if active else color
         text = text.replace(
             "\u25cf", f"#[fg={color}]\u25cf#[fg={foreground}]", 1,
         )
@@ -330,7 +325,7 @@ def window_cell(group, row, active_window):
         width = group["width"] - 2
         title = group["title"][:width].center(width)
         emphasis = "#[bold]" if active else ""
-        label = emphasis + styled_label(title, dot_color, background, foreground)
+        label = emphasis + styled_label(title, dot_color, active, foreground)
         return rounded(label, background, target)
     parts, suffix = fitted_parts(group["parts"], group["width"])
     chunks = []
@@ -339,7 +334,7 @@ def window_cell(group, row, active_window):
         background = ACTIVE_PANE if active else PILL
         foreground = "#ffffff" if active else TEXT
         emphasis = "#[bold]" if active else ""
-        label = emphasis + styled_label(f" {text} ", color, background, foreground)
+        label = emphasis + styled_label(f" {text} ", color, active, foreground)
         chunks.append(rounded(label, background, pid))
     used = sum(len(text) + 4 for text, _, _ in parts) + max(0, len(parts) - 1) + len(suffix)
     padding = max(0, group["width"] - used)

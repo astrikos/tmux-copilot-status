@@ -46,10 +46,11 @@ Only `copilot` and `copilot-cli` processes get colored activity dots:
 | Blue | Working |
 | Amber | Waiting for permission or an answer |
 | Green | Idle |
-| Gray | Unknown; no usable hook state |
+| Gray | Selected pane, or unknown status |
 
 Single-pane windows have no lower button; their dot sits inside the header,
-immediately before `copilot`. Dots use darker shades on green pills for contrast.
+immediately before `copilot`. The selected Copilot's dot stays gray; status
+tracking continues, and its status color returns when you switch away.
 Split windows show process buttons underneath. Groups stay centered;
 `+N windows` indicates overflow. Enable tmux mouse support to click headers
 or pane buttons, including across sessions.

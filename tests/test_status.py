@@ -118,7 +118,7 @@ class Rendering(unittest.TestCase):
         bottom = status.render([item], 1, 20, "@1")
         self.assertIn("1 \u25cf copilot", plain(top))
         self.assertIn("bg=" + status.ACTIVE, top)
-        self.assertIn("fg=" + status.ACTIVE_DOTS[status.COLORS["waiting"]], top)
+        self.assertIn("fg=" + status.SELECTED_DOT, top)
         self.assertEqual(plain(top).count("\u25cf"), 1)
         self.assertLess(plain(top).index("\u25cf"), plain(top).index("\ue0b4"))
         self.assertIn("#[range=user|%10,", top)
@@ -183,7 +183,7 @@ class Rendering(unittest.TestCase):
         self.assertIn("bg=" + status.ACTIVE_PANE, segment(selected, copilot))
         self.assertIn("#[bold]", segment(selected, copilot))
         self.assertIn(
-            f"#[fg={status.COLORS['idle']}]\u25cf#[fg=#ffffff]",
+            f"#[fg={status.SELECTED_DOT}]\u25cf#[fg=#ffffff]",
             segment(selected, copilot),
         )
         self.assertIn("bg=" + status.PILL, segment(selected, ordinary))
@@ -199,6 +199,19 @@ class Rendering(unittest.TestCase):
         self.assertIn("fg=" + status.COLORS["idle"], segment(selected, copilot))
         self.assertIn("bg=" + status.ACTIVE_PANE, segment(selected, ordinary))
         self.assertIn("#[bold]#[fg=#ffffff]", segment(selected, ordinary))
+
+    def test_selected_copilot_dot_stays_gray_until_focus_moves_away(self):
+        for state, color in status.COLORS.items():
+            for split in (False, True):
+                with self.subTest(state=state, split=split):
+                    copilot = pane(state=state)
+                    copilot["title"] = "copilot"
+                    items = [copilot, pane(index=1, state=None)] if split else [copilot]
+                    group = status.groups(items)[0]
+                    selected = status.window_cell(group, int(split), "@1")
+                    self.assertIn(f"#[fg={status.SELECTED_DOT}]\u25cf", selected)
+                    unfocused = status.window_cell(group, int(split), "@2")
+                    self.assertIn(f"#[fg={color}]\u25cf", unfocused)
 
     def test_width_budget_and_active_window_survives_overflow(self):
         items = [pane(window=i, state="waiting" if i == 2 else "working")
