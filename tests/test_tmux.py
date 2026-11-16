@@ -110,7 +110,13 @@ class TmuxIntegration(unittest.TestCase):
 
                 tmux("select-pane", "-t", first)
                 event(first, "userPromptSubmitted")
-                event(second, "notification", notification_type="permission_prompt")
+                event(second, "preToolUse", toolCalls=[
+                    {"id": "approval"}, {"id": "sibling"},
+                ])
+                event(second, "notification", notificationType="permission_prompt")
+                self.assertEqual(
+                    event(second, "postToolUse", toolCallId="sibling")["state"], "waiting",
+                )
                 event(third, "agentStop")
                 bottom = render()
                 self.assertNotIn("p0", bottom)
@@ -179,7 +185,9 @@ class TmuxIntegration(unittest.TestCase):
                               if "key " in line or "message:" in line),
                 )
 
-                self.assertEqual(event(second, "postToolUse")["state"], "working")
+                self.assertEqual(
+                    event(second, "postToolUse", toolCallId="approval")["state"], "working",
+                )
                 self.assertNotIn("#e5b567", render(styled=True))
                 self.assertEqual(event(first, "sessionEnd")["state"], "ended")
                 tmux(

@@ -69,9 +69,12 @@ Status rendering runs asynchronously; navigation never waits for Python.
 Mouse clicks use native tmux commands. Repeated hook states update metadata
 without requesting redundant redraws.
 
-Only state, session ID, timestamp, and process identity are stored. No prompts,
-tool arguments, or scrollback. Hook-derived states are approximate: missed
-events can leave an old state, and waiting clears on the next activity event.
+Only state, session ID, timestamp, process identity, and outstanding tool-call
+IDs are stored. No prompts, tool arguments, or scrollback. Parallel tool
+completions do not clear waiting while other calls in the batch remain.
+Hook-derived states are approximate: missed events can leave an old state.
+After approval, amber can remain until the batch finishes or new activity starts;
+there is no separate approval-completed hook.
 
 ## Font and rollback
 

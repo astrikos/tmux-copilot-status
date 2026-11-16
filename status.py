@@ -87,6 +87,8 @@ def owner_key(owner):
 def transition(previous, event, data, owner):
     session = data.get("sessionId")
     timestamp = data.get("timestamp")
+    if event == "preToolUse" and "timestamp" not in data:
+        timestamp = time.time() * 1000
     if (
         not isinstance(session, str) or not session
         or not isinstance(timestamp, (int, float))
@@ -108,14 +110,17 @@ def transition(previous, event, data, owner):
         and previous.get("state") == "ended" and event != "sessionStart"
     ):
         return None
+    same_session = same_owner and previous.get("session") == session
+    pending = list(previous.get("pending_tools", [])) if same_session else []
     if event == "notification":
-        if data.get("notification_type") not in (
+        if data.get("notificationType", data.get("notification_type")) not in (
             "permission_prompt", "elicitation_dialog"
         ):
             return None
         state = "waiting"
     elif event == "sessionStart":
         state = "working" if data.get("initialPrompt") else "idle"
+        pending = []
     elif event == "agentStop":
         state = "idle"
     elif event == "sessionEnd":
@@ -124,11 +129,29 @@ def transition(previous, event, data, owner):
         "userPromptSubmitted", "preToolUse", "postToolUse", "postToolUseFailure"
     ):
         state = "working"
+        if event == "preToolUse":
+            pending = [
+                call["id"] for call in data.get("toolCalls", [])
+                if isinstance(call, dict) and isinstance(call.get("id"), str)
+                and call["id"]
+            ]
+            if not pending and isinstance(data.get("toolCallId"), str):
+                pending = [data["toolCallId"]]
+        elif event in ("postToolUse", "postToolUseFailure"):
+            pending = [tool for tool in pending if tool != data.get("toolCallId")]
+            # A sibling tool can finish while another still awaits approval.
+            if same_session and previous.get("state") == "waiting" and pending:
+                state = "waiting"
+        else:
+            pending = []
     else:
         return None
-    return {
+    updated = {
         "state": state, "session": session, "timestamp": timestamp, "owner": owner
     }
+    if pending and state in ("working", "waiting"):
+        updated["pending_tools"] = pending
+    return updated
 
 
 def hook(event):

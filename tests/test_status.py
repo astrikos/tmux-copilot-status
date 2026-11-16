@@ -64,6 +64,60 @@ class Transitions(unittest.TestCase):
         for kind in ("shell_completed", "agent_completed", "agent_idle"):
             self.assertIsNone(self.event(record, "notification", 1, notification_type=kind))
 
+    def test_native_notification_field_and_legacy_alias(self):
+        for field in ("notificationType", "notification_type"):
+            for kind in ("permission_prompt", "elicitation_dialog"):
+                with self.subTest(field=field, kind=kind):
+                    record = self.event({}, "notification", **{field: kind})
+                    self.assertEqual(record["state"], "waiting")
+
+    def test_batched_pre_tool_hook_without_timestamp(self):
+        data = {
+            "sessionId": "session",
+            "toolCalls": [{"id": "approval", "name": "bash", "args": {}}],
+        }
+        with patch.object(status.time, "time", return_value=self.now / 1000):
+            record = status.transition({}, "preToolUse", data, self.owner)
+        self.assertEqual(record["timestamp"], self.now)
+        self.assertEqual(record["pending_tools"], ["approval"])
+        self.assertEqual(record["state"], "working")
+
+    def test_parallel_completions_preserve_waiting_until_batch_finishes(self):
+        for completion in ("postToolUse", "postToolUseFailure"):
+            with self.subTest(completion=completion):
+                record = self.event({}, "preToolUse", toolCalls=[
+                    {"id": "approval"}, {"id": "sibling"},
+                ])
+                record = self.event(
+                    record, "notification", 1, notificationType="permission_prompt",
+                )
+                record = self.event(record, completion, 2, toolCallId="sibling")
+                self.assertEqual(record["state"], "waiting")
+                self.assertEqual(record["pending_tools"], ["approval"])
+                record = self.event(record, completion, 3, toolCallId="unrelated")
+                self.assertEqual(record["state"], "waiting")
+                record = self.event(record, completion, 4, toolCallId="approval")
+                self.assertEqual(record["state"], "working")
+                self.assertNotIn("pending_tools", record)
+
+    def test_waiting_batch_is_reset_by_new_activity_and_session(self):
+        record = self.event({}, "preToolUse", toolCalls=[{"id": "old"}])
+        record = self.event(
+            record, "notification", 1, notificationType="elicitation_dialog",
+        )
+        for event, extra, pending in (
+            ("preToolUse", {"toolCalls": [{"id": "new"}]}, ["new"]),
+            ("userPromptSubmitted", {}, None),
+            ("userPromptSubmitted", {"sessionId": "new"}, None),
+            ("sessionStart", {"initialPrompt": "resume"}, None),
+            ("agentStop", {}, None),
+            ("sessionEnd", {}, None),
+        ):
+            with self.subTest(event=event, extra=extra):
+                updated = self.event(record, event, 2, **extra)
+                self.assertNotEqual(updated["state"], "waiting")
+                self.assertEqual(updated.get("pending_tools"), pending)
+
     def test_delayed_events_and_end_tombstone(self):
         record = self.event({}, "agentStop", 10)
         self.assertIsNone(self.event(
